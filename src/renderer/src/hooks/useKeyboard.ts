@@ -114,7 +114,7 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
       const nonModifierKeys = keys.filter((key) => !allModifiers.has(key));
       if (nonModifierKeys.length === 0) return acc;
 
-      const primaryKey = nonModifierKeys[nonModifierKeys.length - 1];
+      const primaryKey = nonModifierKeys.at(-1);
       if (primaryKey == null) return acc;
       const extraNonModifierKeys = new Set(nonModifierKeys.slice(0, -1));
       const requireCtrl = keys.some((key) => controlModifiers.has(key));
