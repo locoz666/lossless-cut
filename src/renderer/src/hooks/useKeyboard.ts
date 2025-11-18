@@ -115,6 +115,7 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
       if (nonModifierKeys.length === 0) return acc;
 
       const primaryKey = nonModifierKeys[nonModifierKeys.length - 1];
+      if (primaryKey == null) return acc;
       const extraNonModifierKeys = new Set(nonModifierKeys.slice(0, -1));
       const requireCtrl = keys.some((key) => controlModifiers.has(key));
       const requireShift = keys.some((key) => shiftModifiers.has(key));
