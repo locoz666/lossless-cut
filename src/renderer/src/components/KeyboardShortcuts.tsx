@@ -38,9 +38,8 @@ const renderKeys = (keys: string[]) => keys.map((key, i) => (
 // You can substitute option for alt and command for meta.
 function fixKeys(keys: string[]) {
   const uniqed = uniq(keys);
-  const nonModifierKeys = keys.filter((key) => !allModifiers.has(key));
+  const nonModifierKeys = uniqed.filter((key) => !allModifiers.has(key));
   if (nonModifierKeys.length === 0) return []; // only modifiers is invalid
-  if (nonModifierKeys.length > 1) return []; // can only have one non-modifier
   return orderBy(uniqed, [(key) => !shiftModifiers.has(key), (key) => !controlModifiers.has(key), (key) => !altModifiers.has(key), (key) => !metaModifiers.has(key), (key) => key]);
 }
 

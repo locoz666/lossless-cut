@@ -31,6 +31,7 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
   const [keyboardLayoutMap, setKeyboardLayoutMap] = useState<KeyboardLayoutMap | undefined>();
 
   const altActionRef = useRef<boolean>(false);
+  const nonModifierKeysDownRef = useRef<Set<string>>(new Set());
 
   const onKeyUp2 = useCallback(({ action }: KeyEventParams) => {
     const fn = action && keyUpActions[action];
@@ -99,13 +100,41 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
   }, [onKeyUp2]);
 
   useEffect(() => {
-    const keyBindingsByKeyCode = keyBindings.reduce((acc, kb) => {
-      kb.keys.split('+').forEach((key) => {
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(kb);
-      });
+    type NormalizedKeyBinding = KeyBinding & {
+      primaryKey: string,
+      extraNonModifierKeys: Set<string>,
+      requireCtrl: boolean,
+      requireShift: boolean,
+      requireAlt: boolean,
+      requireMeta: boolean,
+    };
+
+    const keyBindingsByPrimaryKey = keyBindings.reduce((acc, kb) => {
+      const keys = kb.keys.split('+');
+      const nonModifierKeys = keys.filter((key) => !allModifiers.has(key));
+      if (nonModifierKeys.length === 0) return acc;
+
+      const primaryKey = nonModifierKeys[nonModifierKeys.length - 1];
+      const extraNonModifierKeys = new Set(nonModifierKeys.slice(0, -1));
+      const requireCtrl = keys.some((key) => controlModifiers.has(key));
+      const requireShift = keys.some((key) => shiftModifiers.has(key));
+      const requireAlt = keys.some((key) => altModifiers.has(key));
+      const requireMeta = keys.some((key) => metaModifiers.has(key));
+
+      const normalized: NormalizedKeyBinding = {
+        ...kb,
+        primaryKey,
+        extraNonModifierKeys,
+        requireCtrl,
+        requireShift,
+        requireAlt,
+        requireMeta,
+      };
+
+      if (!acc[primaryKey]) acc[primaryKey] = [];
+      acc[primaryKey].push(normalized);
       return acc;
-    }, {} as Record<string, KeyBinding[]>);
+    }, {} as Record<string, NormalizedKeyBinding[]>);
 
     function onKeyDown(params: KeyEventParams) {
       if (onKeyDownRef.current == null) return true;
@@ -129,7 +158,13 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
         altActionRef.current = false;
       }
 
-      if (allModifiers.has(e.code)) {
+      const isModifier = allModifiers.has(e.code);
+
+      if (ev === 'keydown' && !isModifier) {
+        nonModifierKeysDownRef.current.add(e.code);
+      }
+
+      if (isModifier) {
         return; // ignore pure modifier key events
       }
 
@@ -139,17 +174,22 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
       const meta = e.metaKey;
 
       // only use first one, if multiple matches (shouldn't happen anyway)
-      const matchingKeyBinding = (keyBindingsByKeyCode[e.code] ?? []).find((kb) => {
-        const kbKeys = new Set(kb.keys.split('+'));
-        if ((controlModifiers.intersection(kbKeys).size > 0) !== ctrl) return false;
-        if ((shiftModifiers.intersection(kbKeys).size > 0) !== shift) return false;
-        if ((altModifiers.intersection(kbKeys).size > 0) !== alt) return false;
-        if ((metaModifiers.intersection(kbKeys).size > 0) !== meta) return false;
+      const pressedNonModifiers = nonModifierKeysDownRef.current;
+      const matchingKeyBinding = (keyBindingsByPrimaryKey[e.code] ?? []).find((kb) => {
+        if (kb.requireCtrl !== ctrl) return false;
+        if (kb.requireShift !== shift) return false;
+        if (kb.requireAlt !== alt) return false;
+        if (kb.requireMeta !== meta) return false;
+        for (const requiredKey of kb.extraNonModifierKeys) {
+          if (!pressedNonModifiers.has(requiredKey)) return false;
+        }
         return true;
       });
 
       if (ev === 'keyup') onKeyUp({ e, action: matchingKeyBinding?.action });
       else onKeyDown({ e, action: matchingKeyBinding?.action });
+
+      if (ev === 'keyup') pressedNonModifiers.delete(e.code);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => handleKeyEvent(e, 'keydown');
@@ -174,6 +214,15 @@ export default ({ keyBindings, keyUpActions, getKeyboardAction, closeExportConfi
     window.addEventListener('focus', updateKeyboardLayout);
     return () => window.removeEventListener('focus', updateKeyboardLayout);
   }, [updateKeyboardLayout]);
+
+  useEffect(() => {
+    const clearPressedNonModifiers = () => {
+      nonModifierKeysDownRef.current.clear();
+    };
+
+    window.addEventListener('blur', clearPressedNonModifiers);
+    return () => window.removeEventListener('blur', clearPressedNonModifiers);
+  }, []);
 
   return {
     keyboardLayoutMap,
