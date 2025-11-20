@@ -114,13 +114,18 @@ jobs:
           mac_certs: ${{ secrets.mac_certs }}
           mac_certs_password: ${{ secrets.mac_certs_password }}
 
+          # When no signing certificates are available (e.g. forks), avoid MAS target (requires signing)
+          # and fall back to unsigned dmg to keep CI green.
+          args: ${{ startsWith(matrix.os, 'macos') && (secrets.mac_certs == '' && '--mac dmg' || '') || '' }}
+
 # Temporary 30 day certificate, not needed for Microsoft Store
 #          windows_certs: ${{ secrets.windows_certs }}
 #          windows_certs_password: ${{ secrets.windows_certs_password }}
         env:
-          APPLE_API_KEY: ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.api_key_id }}.p8
-          APPLE_API_KEY_ID: ${{ secrets.api_key_id }}
-          APPLE_API_ISSUER: ${{ secrets.api_key_issuer_id }}
+          APPLE_API_KEY: ${{ secrets.mac_certs == '' && '' || format('~/.appstoreconnect/private_keys/AuthKey_{0}.p8', secrets.api_key_id) }}
+          APPLE_API_KEY_ID: ${{ secrets.mac_certs == '' && '' || secrets.api_key_id }}
+          APPLE_API_ISSUER: ${{ secrets.mac_certs == '' && '' || secrets.api_key_issuer_id }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.mac_certs == '' && 'false' || 'true' }}
 
       - run: npx tsx script/e2e.mts 'dist/mac-arm64/LosslessCut.app/Contents/MacOS/LosslessCut' 0:none screenshot.jpeg
         if: startsWith(matrix.os, 'macos')
@@ -170,4 +175,3 @@ jobs:
             dist/LosslessCut-linux-armv7l.tar.bz2
             dist/LosslessCut-linux-x64.tar.bz2
             screenshot.jpeg
-
